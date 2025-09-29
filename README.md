@@ -15,8 +15,7 @@ File Size Display: Shows the name and human-readable size of the selected file.
 Instant Copy: A dedicated button allows for quickly copying the resulting hash to the clipboard.
 
 # 🚀 Live Demo
-You can try the live application right now!
-
+https://mitul841.github.io/SHA-FILE/
 View Live Demo on GitHub Pages
 
 # 🛠️ How to Use
