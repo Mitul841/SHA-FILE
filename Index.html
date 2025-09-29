@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SHA File Hashing Utility</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Load CryptoJS (for reliable hashing) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js"></script>
+    <!-- Load Inter Font -->
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            /* New subtle background gradient for SHA (more cool teal/blue) */
+            background: linear-gradient(135deg, #101c2c 0%, #0c131d 100%);
+        }
+        /* Custom scrollbar for textareas */
+        textarea::-webkit-scrollbar {
+            width: 8px;
+        }
+        textarea::-webkit-scrollbar-thumb {
+            background-color: #2dd4bf; /* Teal-400 */
+            border-radius: 4px;
+        }
+        textarea::-webkit-scrollbar-track {
+            background-color: #1f2937; /* Gray-800 */
+        }
+    </style>
+</head>
+<body class="min-h-screen p-4 sm:p-8 flex items-center justify-center">
+
+    <div class="w-full max-w-xl bg-gray-800 p-6 sm:p-10 rounded-2xl shadow-2xl backdrop-blur-sm bg-opacity-95 border border-gray-700">
+        <!-- Header -->
+        <div class="flex items-center space-x-3 mb-2">
+            <!-- Inline SVG Hash Icon -->
+            <svg class="w-8 h-8 text-teal-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4m16 8v-4M4 12V8m8-4v4m0 8v4m-8-8h8"></path>
+            </svg>
+            <h1 class="text-3xl font-extrabold text-white">SHA File Hashing Utility</h1>
+        </div>
+        <p class="text-teal-400 mb-6 font-semibold">Verify file integrity using SHA-1, SHA-256, or SHA-512.</p>
+
+        <!-- Notification Area -->
+        <div id="message-box" class="hidden p-3 mb-4 rounded-xl text-sm transition-all duration-300 transform shadow-md" role="alert"></div>
+
+        <!-- Input Section -->
+        <div class="space-y-6">
+            <!-- Algorithm Selector -->
+            <div>
+                <label for="algorithm-select" class="block text-sm font-medium text-gray-300 mb-1">Select Hashing Algorithm</label>
+                <select id="algorithm-select"
+                        class="w-full p-4 bg-gray-700 text-white border-2 border-gray-600 rounded-xl focus:ring-teal-500 focus:border-teal-500 transition duration-150 shadow-md outline-none">
+                    <option value="SHA-256">SHA-256 (Recommended)</option>
+                    <option value="SHA-512">SHA-512</option>
+                    <option value="SHA-1">SHA-1 (Legacy)</option>
+                </select>
+            </div>
+
+            <!-- File Input -->
+            <div>
+                <label for="file-input" class="block text-sm font-medium text-gray-300 mb-1">Upload File to Hash</label>
+                <div class="flex items-center space-x-4 p-4 bg-gray-700 border-2 border-gray-600 rounded-xl shadow-md">
+                    <input type="file" id="file-input" class="hidden" accept="*">
+                    <span id="file-name" class="text-gray-400 truncate flex-1">No file selected.</span>
+                    <button id="select-file-btn" type="button" 
+                            class="py-2 px-4 bg-gray-600 hover:bg-gray-500 text-white text-sm font-medium rounded-lg transition duration-150 transform active:scale-95">
+                        Choose File
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Action Button -->
+        <div class="mt-8">
+            <button id="hash-btn" disabled
+                    class="w-full py-4 px-6 bg-gradient-to-r from-teal-500 to-teal-600 hover:from-teal-600 hover:to-teal-700 text-gray-900 font-bold rounded-xl shadow-lg transition duration-300 transform hover:scale-[1.01] active:scale-[0.99] focus:outline-none focus:ring-4 focus:ring-teal-500/50 disabled:opacity-50 disabled:cursor-not-allowed">
+                Calculate Hash
+            </button>
+        </div>
+
+        <!-- Output Section -->
+        <div class="mt-8">
+            <label for="output-hash" class="block text-sm font-medium text-gray-300 mb-1">Resulting Hash</label>
+            <textarea id="output-hash" rows="4" readonly
+                      placeholder="The calculated hash will appear here (e.g., 85938d21...). Hashing happens locally in your browser."
+                      class="w-full p-4 bg-gray-900 text-teal-300 font-mono text-sm border-2 border-gray-700 rounded-xl cursor-text shadow-inner resize-none"></textarea>
+            
+            <div class="flex justify-between mt-3">
+                <p id="hash-info" class="text-xs text-gray-500"></p>
+                <button id="copy-btn" disabled class="py-2 px-5 bg-gray-600 hover:bg-gray-500 text-white text-sm font-medium rounded-lg transition duration-150 transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed shadow-md">
+                    Copy Hash
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // DOM Elements
+        const fileInput = document.getElementById('file-input');
+        const fileNameSpan = document.getElementById('file-name');
+        const algorithmSelect = document.getElementById('algorithm-select');
+        const hashBtn = document.getElementById('hash-btn');
+        const outputTextarea = document.getElementById('output-hash');
+        const copyBtn = document.getElementById('copy-btn');
+        const messageBox = document.getElementById('message-box');
+        const hashInfo = document.getElementById('hash-info');
+        const selectFileBtn = document.getElementById('select-file-btn');
+        
+        // --- Utility Functions ---
+
+        /**
+         * Shows a message box with enhanced styling.
+         * @param {string} message - The text to display.
+         * @param {string} type - 'success', 'error', or 'info'.
+         */
+        function showMessage(message, type = 'info') {
+            let bgColor, textColor, ringColor;
+
+            switch (type) {
+                case 'success':
+                    bgColor = 'bg-green-600';
+                    textColor = 'text-white';
+                    ringColor = 'ring-green-500';
+                    break;
+                case 'error':
+                    bgColor = 'bg-red-700';
+                    textColor = 'text-white';
+                    ringColor = 'ring-red-600';
+                    break;
+                case 'info':
+                default:
+                    bgColor = 'bg-blue-700';
+                    textColor = 'text-white';
+                    ringColor = 'ring-blue-600';
+                    break;
+            }
+
+            messageBox.textContent = message;
+            messageBox.className = `p-3 mb-4 rounded-xl text-sm ${bgColor} ${textColor} transition-all duration-300 transform shadow-xl focus:ring-4 ${ringColor}`;
+            messageBox.classList.remove('hidden');
+
+            setTimeout(() => {
+                messageBox.classList.add('hidden');
+            }, 5000);
+        }
+
+        /**
+         * Converts file size in bytes to a human-readable format.
+         * @param {number} bytes - File size in bytes.
+         * @returns {string} Human-readable file size.
+         */
+        function formatBytes(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        // --- Core Hashing Logic ---
+
+        /**
+         * Calculates the hash of the selected file using the chosen algorithm.
+         */
+        function calculateHash() {
+            const file = fileInput.files[0];
+            if (!file) {
+                showMessage("🛑 Error: Please select a file first.", 'error');
+                return;
+            }
+
+            hashBtn.disabled = true;
+            outputTextarea.value = '';
+            copyBtn.disabled = true;
+            hashInfo.textContent = '';
+
+            const reader = new FileReader();
+            
+            // Show loading state
+            showMessage('⏳ Reading file and calculating hash. This may take a moment for large files...', 'info');
+
+            reader.onload = (event) => {
+                const fileContent = event.target.result;
+                const algorithm = algorithmSelect.value;
+                let hash;
+
+                try {
+                    // CryptoJS expects the content. Use the appropriate hash function.
+                    switch (algorithm) {
+                        case 'SHA-256':
+                            hash = CryptoJS.SHA256(fileContent).toString(CryptoJS.enc.Hex);
+                            break;
+                        case 'SHA-512':
+                            hash = CryptoJS.SHA512(fileContent).toString(CryptoJS.enc.Hex);
+                            break;
+                        case 'SHA-1':
+                            hash = CryptoJS.SHA1(fileContent).toString(CryptoJS.enc.Hex);
+                            break;
+                        default:
+                            throw new Error('Invalid algorithm selected.');
+                    }
+                    
+                    outputTextarea.value = hash;
+                    hashInfo.textContent = `Algorithm: ${algorithm} | Length: ${hash.length} chars`;
+                    copyBtn.disabled = false;
+                    showMessage(`✅ Hashing successful using ${algorithm}!`, 'success');
+
+                } catch (e) {
+                    console.error("Hashing Error:", e);
+                    showMessage("❌ Hashing failed. Check console for technical details.", 'error');
+                } finally {
+                    hashBtn.disabled = false;
+                }
+            };
+
+            reader.onerror = () => {
+                showMessage("❌ Error reading file. Try a different file.", 'error');
+                hashBtn.disabled = false;
+            };
+
+            // Read the file as a binary string for hashing.
+            // This is generally better for cryptographic libraries to handle binary data.
+            reader.readAsBinaryString(file);
+        }
+
+        /**
+         * Copies the content of the output textarea to the clipboard.
+         */
+        function copyOutput() {
+            if (outputTextarea.value) {
+                outputTextarea.select();
+                document.execCommand('copy');
+                showMessage("📋 Copied hash to clipboard!", 'info');
+            } else {
+                showMessage("💡 Output is empty. Nothing to copy.", 'info');
+            }
+        }
+        
+        // --- Event Listeners and Initial Setup ---
+
+        // Toggles the hidden file input when the "Choose File" button is clicked
+        selectFileBtn.addEventListener('click', () => {
+            fileInput.click();
+        });
+
+        // Update UI when a file is selected
+        fileInput.addEventListener('change', () => {
+            const file = fileInput.files[0];
+            if (file) {
+                fileNameSpan.textContent = `${file.name} (${formatBytes(file.size)})`;
+                hashBtn.disabled = false;
+                outputTextarea.value = '';
+                copyBtn.disabled = true;
+                hashInfo.textContent = '';
+                showMessage("File selected. Click 'Calculate Hash' to begin.", 'info');
+            } else {
+                fileNameSpan.textContent = 'No file selected.';
+                hashBtn.disabled = true;
+            }
+        });
+
+        hashBtn.addEventListener('click', calculateHash);
+        copyBtn.addEventListener('click', copyOutput);
+        
+    </script>
+</body>
+</html>
